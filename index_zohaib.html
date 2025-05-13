@@ -1,0 +1,347 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Zohaib's Marvel/DC Movie DB</title>
+    <style>
+        body {
+            font-family: sans-serif;
+            margin: 20px;
+            background-color: #f4f4f4;
+        }
+        h1, h2 {
+            color: #333;
+            text-align: center;
+        }
+        table {
+            width: 100%;
+            border-collapse: collapse;
+            margin-top: 20px;
+            background-color: #fff;
+            box-shadow: 0 2px 4px rgba(0,0,0,0.1);
+        }
+        th, td {
+            border: 1px solid #ddd;
+            padding: 10px;
+            text-align: left;
+        }
+        th {
+            background-color: #e9e9e9;
+            cursor: pointer; /* Indicate sortable columns */
+        }
+        tr:nth-child(even) {
+            background-color: #f9f9f9;
+        }
+        button {
+            padding: 8px 15px;
+            margin: 5px;
+            cursor: pointer;
+            border: none;
+            border-radius: 4px;
+            font-size: 14px;
+        }
+        .add-button {
+            background-color: #4CAF50;
+            color: white;
+        }
+        .delete-button {
+            background-color: #f44336;
+            color: white;
+        }
+        .add-button:hover {
+            background-color: #45a049;
+        }
+        .delete-button:hover {
+            background-color: #da190b;
+        }
+        #add-form {
+            margin-top: 30px;
+            padding: 20px;
+            background-color: #fff;
+            border-radius: 5px;
+            box-shadow: 0 2px 4px rgba(0,0,0,0.1);
+        }
+        #add-form label {
+            display: block;
+            margin-bottom: 8px;
+            font-weight: bold;
+        }
+        #add-form input[type="text"],
+        #add-form input[type="number"] {
+            width: calc(100% - 22px); /* Account for padding and border */
+            padding: 10px;
+            margin-bottom: 15px;
+            border: 1px solid #ccc;
+            border-radius: 4px;
+        }
+        #status-message {
+            margin-top: 15px;
+            padding: 10px;
+            border-radius: 4px;
+            text-align: center;
+            font-weight: bold;
+        }
+        .success {
+            background-color: #d4edda;
+            color: #155724;
+            border: 1px solid #c3e6cb;
+        }
+        .error {
+            background-color: #f8d7da;
+            color: #721c24;
+            border: 1px solid #f5c6cb;
+        }
+        .hidden {
+            display: none;
+        }
+    </style>
+</head>
+<body>
+
+    <h1>WELCOME, MUHAMMAD ZOHAIB SAEED</h1>
+
+    <div id="add-form">
+        <h2>Add New Movie</h2>
+        <form id="movie-form">
+            <label for="id">ID:</label>
+            <input type="number" id="id" name="id" required>
+
+            <label for="movie">Movie Title:</label>
+            <input type="text" id="movie" name="movie" required>
+
+            <label for="year">Year:</label>
+            <input type="text" id="year" name="Year" required> <!-- Name matches DB column -->
+
+            <label for="genre">Genre:</label>
+            <input type="text" id="genre" name="genre" required>
+
+            <label for="runtime">Runtime:</label>
+            <input type="text" id="runtime" name="runtime" required>
+
+            <label for="description">Description:</label>
+            <input type="text" id="description" name="description" required maxlength="256">
+
+            <label for="imdb_score">IMDb Score:</label>
+            <input type="number" id="imdb_score" name="imdb_score" step="0.1" required>
+
+            <button type="submit" class="add-button">Add Movie</button>
+        </form>
+        <div id="status-message" class="hidden"></div>
+    </div>
+
+    <h2>Movie List</h2>
+    <table id="movie-table">
+        <thead>
+            <tr>
+                <th data-sort="id">ID</th>
+                <th data-sort="movie">Movie</th>
+                <th data-sort="Year">Year</th>
+                <th data-sort="genre">Genre</th>
+                <th data-sort="runtime">Runtime</th>
+                <th data-sort="description">Description</th>
+                <th data-sort="imdb_score">IMDb Score</th>
+                <th>Actions</th>
+            </tr>
+        </thead>
+        <tbody>
+            <!-- Data will be loaded here -->
+        </tbody>
+    </table>
+
+    <script>
+        // --- CONFIGURATION ---
+        // Replace with your EC2 instance's public IP or DNS name
+        const API_BASE_URL = 'http://52.79.115.204:5050';
+        // ---------------------
+
+        const tableBody = document.getElementById('movie-table').querySelector('tbody');
+        const form = document.getElementById('movie-form');
+        const statusMessage = document.getElementById('status-message');
+        let currentData = []; // To store fetched data for sorting
+        let sortColumn = null;
+        let sortAscending = true;
+
+        // --- Utility Functions ---
+        function showStatus(message, isError = false) {
+            statusMessage.textContent = message;
+            statusMessage.className = isError ? 'error' : 'success';
+            setTimeout(() => {
+                statusMessage.className = 'hidden';
+            }, 5000); // Hide after 5 seconds
+        }
+
+        // --- Data Fetching and Display ---
+        async function fetchData() {
+            try {
+                const response = await fetch(`${API_BASE_URL}/data`);
+                if (!response.ok) {
+                    throw new Error(`HTTP error! status: ${response.status}`);
+                }
+                currentData = await response.json();
+                if (!Array.isArray(currentData)) {
+                    console.error("Invalid data format received:", currentData);
+                    showStatus("Error: Received invalid data format from server.", true);
+                    currentData = []; // Reset to empty array
+                }
+                renderTable(currentData);
+            } catch (error) {
+                console.error('Error fetching data:', error);
+                showStatus(`Error fetching data: ${error.message}. Is the backend running?`, true);
+                tableBody.innerHTML = '<tr><td colspan="8" style="text-align:center; color: red;">Failed to load data. Please check the backend connection and try again.</td></tr>';
+            }
+        }
+
+        function renderTable(data) {
+            tableBody.innerHTML = ''; // Clear existing rows
+            if (!data || data.length === 0) {
+                 tableBody.innerHTML = '<tr><td colspan="8" style="text-align:center;">No data available.</td></tr>';
+                 return;
+            }
+            data.forEach(item => {
+                const row = tableBody.insertRow();
+                // Ensure correct order and handle potential missing fields gracefully
+                row.insertCell().textContent = item.id ?? 'N/A';
+                row.insertCell().textContent = item.movie ?? 'N/A';
+                row.insertCell().textContent = item.Year ?? 'N/A'; // Use 'Year' from DB
+                row.insertCell().textContent = item.genre ?? 'N/A';
+                row.insertCell().textContent = item.runtime ?? 'N/A';
+                row.insertCell().textContent = item.description ?? 'N/A';
+                row.insertCell().textContent = item.imdb_score ?? 'N/A';
+
+                const actionCell = row.insertCell();
+                const deleteButton = document.createElement('button');
+                deleteButton.textContent = 'Delete';
+                deleteButton.className = 'delete-button';
+                deleteButton.onclick = () => deleteData(item.id);
+                actionCell.appendChild(deleteButton);
+            });
+        }
+
+        // --- Sorting ---
+        function sortData(column) {
+            if (sortColumn === column) {
+                sortAscending = !sortAscending;
+            } else {
+                sortColumn = column;
+                sortAscending = true;
+            }
+
+            currentData.sort((a, b) => {
+                let valA = a[column];
+                let valB = b[column];
+
+                // Basic type handling for sorting
+                if (typeof valA === 'string') valA = valA.toLowerCase();
+                if (typeof valB === 'string') valB = valB.toLowerCase();
+                if (column === 'Year' || column === 'id' || column === 'imdb_score') {
+                    valA = parseFloat(valA) || 0; // Convert numeric columns
+                    valB = parseFloat(valB) || 0;
+                }
+
+                if (valA < valB) return sortAscending ? -1 : 1;
+                if (valA > valB) return sortAscending ? 1 : -1;
+                return 0;
+            });
+
+            renderTable(currentData);
+            updateSortIndicators();
+        }
+
+        function updateSortIndicators() {
+             document.querySelectorAll('#movie-table th').forEach(th => {
+                 th.classList.remove('sort-asc', 'sort-desc');
+                 if (th.dataset.sort === sortColumn) {
+                     th.classList.add(sortAscending ? 'sort-asc' : 'sort-desc');
+                 }
+             });
+        }
+
+        // Add event listeners to table headers for sorting
+        document.querySelectorAll('#movie-table th[data-sort]').forEach(header => {
+            header.addEventListener('click', () => sortData(header.dataset.sort));
+        });
+
+
+        // --- Add Data ---
+        form.addEventListener('submit', async (event) => {
+            event.preventDefault(); // Prevent default form submission
+
+            const formData = new FormData(form);
+            const data = Object.fromEntries(formData.entries());
+
+            // Convert numeric fields from string to number
+            data.id = parseInt(data.id, 10);
+            data.imdb_score = parseFloat(data.imdb_score);
+
+            // Basic validation check (ensure numbers are valid)
+            if (isNaN(data.id) || isNaN(data.imdb_score)) {
+                showStatus("Error: ID and IMDb Score must be valid numbers.", true);
+                return;
+            }
+
+            try {
+                const response = await fetch(`${API_BASE_URL}/add`, {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/json',
+                    },
+                    body: JSON.stringify(data),
+                });
+
+                const result = await response.json();
+
+                if (!response.ok) {
+                    throw new Error(result.error || `HTTP error! status: ${response.status}`);
+                }
+
+                showStatus(result.message || 'Data added successfully!');
+                form.reset(); // Clear the form
+                fetchData(); // Refresh the table
+            } catch (error) {
+                console.error('Error adding data:', error);
+                showStatus(`Error adding data: ${error.message}`, true);
+            }
+        });
+
+        // --- Delete Data ---
+        async function deleteData(id) {
+            if (!confirm(`Are you sure you want to delete the movie with ID ${id}?`)) {
+                return; // Do nothing if user cancels
+            }
+
+            try {
+                const response = await fetch(`${API_BASE_URL}/delete/${id}`, {
+                    method: 'DELETE',
+                });
+
+                const result = await response.json();
+
+                if (!response.ok) {
+                     throw new Error(result.error || `HTTP error! status: ${response.status}`);
+                }
+
+                showStatus(result.message || `Data with ID ${id} deleted successfully!`);
+                fetchData(); // Refresh the table
+            } catch (error) {
+                console.error('Error deleting data:', error);
+                showStatus(`Error deleting data: ${error.message}`, true);
+            }
+        }
+
+        // --- Initial Load ---
+        document.addEventListener('DOMContentLoaded', fetchData);
+
+    </script>
+     <style> /* Add styles for sort indicators */
+        th.sort-asc::after {
+            content: ' ▲';
+            font-size: 0.8em;
+        }
+        th.sort-desc::after {
+            content: ' ▼';
+            font-size: 0.8em;
+        }
+    </style>
+</body>
+</html>
