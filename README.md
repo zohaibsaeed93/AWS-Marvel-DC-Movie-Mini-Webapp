@@ -1,5 +1,5 @@
 
-# AWS-Marvel-DC-Movie-Webapp
+# AWS-Marvel-DC-Movie-Mini-Webapp
 
 
 
